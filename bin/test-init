@@ -1,0 +1,109 @@
+#!/usr/bin/env node
+var program = require('commander');
+var download = require('download-git-repo');
+var path = require('path');
+var prompt = require('../lib/prompt');
+var Metalsmith = require('metalsmith');
+var renderFile = require('../lib/renderFile');
+var inject = require('../lib/inject');
+var fs = require('fs');
+var inquirer = require('inquirer');
+var rimraf = require('rimraf');
+var filter = require('../lib/filters');
+var ora = require('ora');
+var _name;
+
+program
+  .version('0.0.1')
+  // <param> for necessary and [param] from optional
+  .arguments('<name>')
+  .action(function (name) {
+  	_name = name;
+  });
+ 
+program.parse(process.argv);
+
+if (typeof _name == "undefined") {
+	console.log(
+		"Usage: test-init <projectName>"
+	);
+	return;
+}
+
+var exist = fs.existsSync(_name);
+
+if (!exist) {
+	downloadAndRender();
+} else {
+	inquirer.prompt([{
+		type: "confirm",
+		name: "override",
+		message: "Directory exists, continue?",
+		default: false
+	}], function (answer) {
+		if (answer.override) {
+			rimraf(_name, function (err) {
+				if (err) {
+					console.log(err)
+					
+					return;
+				}
+				downloadAndRender()
+			})
+		}
+	})
+}
+
+function downloadAndRender () {
+	var spinner = ora('downloading template')
+  	
+  	spinner.start()
+	download("mosquito1994/vue-template", _name ,{ clone: false }, function (err) {
+		if (err) {
+			console.log(err);
+		}
+		spinner.stop();
+
+		var metalsmith = Metalsmith(path.join(_name, "/template"));
+
+		prompt(_name, metalsmith, function () {
+			metalsmith
+			.use(filter(metalsmith))
+			.use(renderFile)
+			.use(inject(metalsmith))
+			.clean(false)
+			.source('.')
+			.destination('../')
+			.build(function (err) {
+				if (err) {
+					console.log(err);
+				}
+				fs.unlink(path.join(_name, "meta.json"), function (err) {
+					if (err) {
+						console.log(err);
+					}
+				});
+				rimraf(path.join(_name, "template"), function (err) {
+					if (err) {
+						console.log(err);
+					}
+				});
+
+				var meta = metalsmith.metadata(),
+					complete = meta.completeContent;
+
+				if (complete) {
+					if (typeof complete === "string") {
+						console.log("\n" + complete + "\n");
+					} else if (Object.prototype.toString.call(complete) === "[object Array]") {
+						console.log("\n");
+						complete.forEach(function (item, index) {
+							console.log(item)
+						});
+						console.log("\n");
+					}
+				}
+			});
+		});
+	});
+}
