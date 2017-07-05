@@ -1,6 +1,6 @@
 {
   "name": "test-may-cli",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "description": "",
   "preferGlobal": true,
   "scripts": {
